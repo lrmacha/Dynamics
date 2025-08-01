@@ -2,8 +2,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import re
-import statsmodels.api as sm
-from statsmodels.formula.api import ols
+from scipy.stats import f_oneway
+import numpy as np
 
 # Superscript conversion
 superscript_map = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
@@ -12,7 +12,10 @@ def superscript_codons(label):
     if label == 'WT':
         return label
     parts = re.findall(r'[A-Za-z]+|\d+', label)
-    return ''.join([parts[i].upper() if i % 2 == 0 else parts[i].translate(superscript_map) for i in range(len(parts))])
+    return ''.join([
+        parts[i].upper() if i % 2 == 0 else parts[i].translate(superscript_map)
+        for i in range(len(parts))
+    ])
 
 # Data
 data = {
@@ -25,84 +28,95 @@ data = {
     'H148AW149A':[-59.643, -61.7823, -63.921],
 }
 
-# Format labels for x-axis
+# Format labels
 original_labels = list(data.keys())
 formatted_labels = [superscript_codons(label) for label in original_labels]
 
-# Create DataFrame and melt
+# DataFrame
 df = pd.DataFrame(data)
 df_melted = df.melt(var_name='Mutant', value_name='ΔG')
+df_melted['Group'] = df_melted['Mutant'].apply(lambda x: 'WT' if x == 'WT' else 'Mutant')
 
-# Calculate mean and SD for stats table
-stats = df_melted.groupby('Mutant')['ΔG'].agg(['mean', 'std']).reset_index()
-stats['Mutant'] = stats['Mutant'].apply(superscript_codons)
-stats['mean'] = stats['mean'].map('{:.2f}'.format)
-stats['std'] = stats['std'].map('{:.2f}'.format)
-stats.rename(columns={'Mutant': 'Mutant', 'mean': 'Mean', 'std': 'SD'}, inplace=True)
-order = ['WT'] + [m for m in original_labels if m != 'WT']
-order_superscript = [superscript_codons(m) for m in order]
-stats['order'] = stats['Mutant'].apply(lambda x: order_superscript.index(x))
-stats = stats.sort_values('order').drop(columns='order')
+# Reorder labels to put WT first
+sorted_labels = ['WT'] + sorted([x for x in original_labels if x != 'WT'], key=lambda x: x)
+formatted_sorted_labels = [superscript_codons(label) for label in sorted_labels]
+
+# Summary statistics
+means = df.mean()
+sds = df.std()
+stats = pd.DataFrame({
+    'Mutant': [superscript_codons(k) for k in sorted_labels],
+    'Mean (kcal/mol)': [f"{means[k]:.2f}" for k in sorted_labels],
+    'SD (kcal/mol)': [f"{sds[k]:.2f}" for k in sorted_labels]
+})
 
 # ANOVA
-model = ols('ΔG ~ C(Mutant)', data=df_melted).fit()
-anova_table = sm.stats.anova_lm(model, typ=2)
-anova_p = anova_table['PR(>F)']['C(Mutant)']
+groups = [df[col] for col in sorted_labels]
+anova_stat, anova_p = f_oneway(*groups)
 
-# Plot setup
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 7), gridspec_kw={'width_ratios': [3, 1]})
+# Plotting
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 6), gridspec_kw={'width_ratios': [2.5, 1]})
 
-# Barplot and stripplot on left
-bars = sns.barplot(
+# Barplot
+sns.barplot(
     data=df_melted,
     x='Mutant',
     y='ΔG',
+    order=sorted_labels,
+    ax=ax1,
     errorbar='sd',
-    color='gray',
+    palette=['white' if label == 'WT' else 'lightblue' for label in sorted_labels],
     edgecolor='black',
-    linewidth=1.2,
-    ax=ax1
+    linewidth=1.2
 )
 
-# Customize bar fill
-for patch, mutant in zip(bars.patches, df_melted['Mutant'].unique()):
-    patch.set_facecolor('#1f77b4' if mutant == 'WT' else 'white')
-    patch.set_edgecolor('black')
-
-# Larger data points
+# Overlay data points
 sns.stripplot(
     data=df_melted,
     x='Mutant',
     y='ΔG',
+    order=sorted_labels,
+    ax=ax1,
     color='black',
-    size=9,
+    size=8,  # larger points
     jitter=True,
-    alpha=0.7,
-    ax=ax1
+    alpha=0.8
 )
 
-# Custom axis styles
-ax1.set_xticklabels(formatted_labels, rotation=0, fontsize=14)
-ax1.set_ylabel('ΔG (kcal/mol)', fontsize=13)
-ax1.set_xlabel('')  # No x-axis label
-ax1.grid(False)
+# X-axis formatting
+ax1.set_xticks(range(len(formatted_sorted_labels)))
+ax1.set_xticklabels(formatted_sorted_labels, rotation=0, fontsize=12)
+ax1.set_ylabel('ΔG (kcal/mol)', fontsize=12)
+ax1.set_xlabel('')
+ax1.grid(False)  # remove gridlines
+
+# WT mean reference line
+wt_mean = df['WT'].mean()
+ax1.axhline(wt_mean, linestyle='--', color='blue', linewidth=1.2)
+
+# Remove title and legend
+ax1.set_title('')
+# ax1.legend()  # Not used
 
 # Stats table on right
 ax2.axis('off')
 table = ax2.table(
     cellText=stats.values,
-    colLabels=['Mutant', 'Mean (kcal/mol)', 'SD (kcal/mol)'],
+    colLabels=stats.columns,
     cellLoc='center',
     loc='center',
-    colColours=['lightblue']*3
+    colColours=['lightblue'] * 3
 )
 table.auto_set_font_size(False)
-table.set_fontsize(11)
+table.set_fontsize(11)  # Slightly smaller for entire table
 table.scale(1, 2.2)
 
-# Add ANOVA p-value just below table
-anova_text = f'Overall ANOVA p-value = {anova_p:.4f}'
-ax2.text(0.5, 0, anova_text, ha='center', va='top', fontsize=12, transform=ax2.transAxes)
+# Reduce column header font size separately
+for col in range(len(stats.columns)):
+    table[(0, col)].set_fontsize(7.5)
+
+# ANOVA p-value under table
+ax2.text(0.5, 0, f'Overall ANOVA p-value = {anova_p:.4f}', ha='center', va='top', fontsize=12, transform=ax2.transAxes)
 
 plt.tight_layout()
 plt.show()
