@@ -1,0 +1,104 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import re
+import statsmodels.api as sm
+from statsmodels.formula.api import ols
+from statsmodels.stats.multicomp import pairwise_tukeyhsd
+
+# Superscript conversion
+superscript_map = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
+
+def superscript_codons(label):
+    if label == 'WT':
+        return label
+    parts = re.findall(r'[A-Za-z]+|\d+', label)
+    return ''.join([parts[i].upper() if i % 2 == 0 else parts[i].translate(superscript_map) for i in range(len(parts))])
+
+# Data
+data = {
+    'WT':        [-90.603, -76.675, -62.747],
+    'H148P':     [-86.168, -85.2021, -84.236],
+    'H148A':     [-84.0843, -66.3143, -48.5443],
+    'W149R':     [-77.516, -81.2264, -84.9364],
+    'W149A':     [-69.552, -69.8835, -70.216],
+    'H148PW149R':[-77.093, -88.4217, -99.749],
+    'H148AW149A':[-59.643, -61.7823, -63.921],
+}
+
+# Format labels for x-axis
+original_labels = list(data.keys())
+formatted_labels = [superscript_codons(label) for label in original_labels]
+
+# DataFrame melt
+df = pd.DataFrame(data)
+df_melted = df.melt(var_name='Mutant', value_name='ΔG')
+
+# Calculate mean and SD for table
+stats = df_melted.groupby('Mutant')['ΔG'].agg(['mean', 'std']).reset_index()
+stats['Mutant'] = stats['Mutant'].apply(superscript_codons)
+stats['mean'] = stats['mean'].map('{:.2f}'.format)
+stats['std'] = stats['std'].map('{:.2f}'.format)
+stats.rename(columns={'Mutant': 'Mutant', 'mean': 'Mean', 'std': 'SD'}, inplace=True)
+order = ['WT'] + [m for m in original_labels if m != 'WT']
+order_superscript = [superscript_codons(m) for m in order]
+stats['order'] = stats['Mutant'].apply(lambda x: order_superscript.index(x))
+stats = stats.sort_values('order').drop(columns='order')
+
+# ANOVA
+model = ols('ΔG ~ C(Mutant)', data=df_melted).fit()
+anova_table = sm.stats.anova_lm(model, typ=2)
+anova_p = anova_table['PR(>F)']['C(Mutant)']
+
+# Plot setup
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 7), gridspec_kw={'width_ratios': [3, 1]})
+
+bars = sns.barplot(
+    data=df_melted,
+    x='Mutant',
+    y='ΔG',
+    errorbar='sd',
+    color='gray',
+    edgecolor='black',
+    linewidth=1.2,
+    ax=ax1
+)
+
+for patch, mutant in zip(bars.patches, df_melted['Mutant'].unique()):
+    patch.set_facecolor('#1f77b4' if mutant == 'WT' else 'white')
+    patch.set_edgecolor('black')
+
+sns.stripplot(
+    data=df_melted,
+    x='Mutant',
+    y='ΔG',
+    color='black',
+    size=6,
+    jitter=True,
+    alpha=0.7,
+    ax=ax1
+)
+
+ax1.set_xticklabels(formatted_labels, rotation=45)
+ax1.set_title('ΔG values for WT vs Mutants')
+ax1.set_ylabel('ΔG (kcal/mol)')
+
+ax2.axis('off')
+table = ax2.table(
+    cellText=stats.values,
+    colLabels=['Mutant', 'Mean (kcal/mol)', 'SD (kcal/mol)'],
+    cellLoc='center',
+    loc='center',
+    colColours=['lightblue']*3
+)
+table.auto_set_font_size(False)
+table.set_fontsize(11)
+table.scale(1, 2)
+
+# Add overall ANOVA p-value on the plot below bars
+anova_text = f'Overall ANOVA p-value = {anova_p:.4f}'
+y_min = df_melted['ΔG'].min()
+ax1.text(0, y_min - (abs(y_min) * 0.2), anova_text, ha='left', va='top', fontsize=12, color='black')
+
+plt.tight_layout()
+plt.show()
