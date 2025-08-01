@@ -4,7 +4,6 @@ import seaborn as sns
 import re
 import statsmodels.api as sm
 from statsmodels.formula.api import ols
-from statsmodels.stats.multicomp import pairwise_tukeyhsd
 
 # Superscript conversion
 superscript_map = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
@@ -30,11 +29,11 @@ data = {
 original_labels = list(data.keys())
 formatted_labels = [superscript_codons(label) for label in original_labels]
 
-# DataFrame melt
+# Create DataFrame and melt
 df = pd.DataFrame(data)
 df_melted = df.melt(var_name='Mutant', value_name='ΔG')
 
-# Calculate mean and SD for table
+# Calculate mean and SD for stats table
 stats = df_melted.groupby('Mutant')['ΔG'].agg(['mean', 'std']).reset_index()
 stats['Mutant'] = stats['Mutant'].apply(superscript_codons)
 stats['mean'] = stats['mean'].map('{:.2f}'.format)
@@ -53,6 +52,7 @@ anova_p = anova_table['PR(>F)']['C(Mutant)']
 # Plot setup
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 7), gridspec_kw={'width_ratios': [3, 1]})
 
+# Barplot and stripplot on left
 bars = sns.barplot(
     data=df_melted,
     x='Mutant',
@@ -83,6 +83,7 @@ ax1.set_xticklabels(formatted_labels, rotation=45)
 ax1.set_title('ΔG values for WT vs Mutants')
 ax1.set_ylabel('ΔG (kcal/mol)')
 
+# Stats table on right
 ax2.axis('off')
 table = ax2.table(
     cellText=stats.values,
@@ -93,12 +94,11 @@ table = ax2.table(
 )
 table.auto_set_font_size(False)
 table.set_fontsize(11)
-table.scale(1, 2)
+table.scale(1, 2.2)  # Slightly taller to make room for p-value text
 
-# Add overall ANOVA p-value on the plot below bars
+# Add ANOVA p-value immediately below the table
 anova_text = f'Overall ANOVA p-value = {anova_p:.4f}'
-y_min = df_melted['ΔG'].min()
-ax1.text(0, y_min - (abs(y_min) * 0.2), anova_text, ha='left', va='top', fontsize=12, color='black')
+ax2.text(0.5, 0, anova_text, ha='center', va='top', fontsize=12, transform=ax2.transAxes)
 
 plt.tight_layout()
 plt.show()
