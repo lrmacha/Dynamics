@@ -64,24 +64,28 @@ bars = sns.barplot(
     ax=ax1
 )
 
+# Customize bar fill
 for patch, mutant in zip(bars.patches, df_melted['Mutant'].unique()):
     patch.set_facecolor('#1f77b4' if mutant == 'WT' else 'white')
     patch.set_edgecolor('black')
 
+# Larger data points
 sns.stripplot(
     data=df_melted,
     x='Mutant',
     y='ΔG',
     color='black',
-    size=6,
+    size=9,
     jitter=True,
     alpha=0.7,
     ax=ax1
 )
 
-ax1.set_xticklabels(formatted_labels, rotation=45)
-ax1.set_title('ΔG values for WT vs Mutants')
-ax1.set_ylabel('ΔG (kcal/mol)')
+# Custom axis styles
+ax1.set_xticklabels(formatted_labels, rotation=0, fontsize=14)
+ax1.set_ylabel('ΔG (kcal/mol)', fontsize=13)
+ax1.set_xlabel('')  # No x-axis label
+ax1.grid(False)
 
 # Stats table on right
 ax2.axis('off')
@@ -94,9 +98,9 @@ table = ax2.table(
 )
 table.auto_set_font_size(False)
 table.set_fontsize(11)
-table.scale(1, 2.2)  # Slightly taller to make room for p-value text
+table.scale(1, 2.2)
 
-# Add ANOVA p-value immediately below the table
+# Add ANOVA p-value just below table
 anova_text = f'Overall ANOVA p-value = {anova_p:.4f}'
 ax2.text(0.5, 0, anova_text, ha='center', va='top', fontsize=12, transform=ax2.transAxes)
 
