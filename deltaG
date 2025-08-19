@@ -11,9 +11,11 @@ superscript_map = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
 def superscript_codons(label):
     if label == 'WT':
         return label
-    parts = re.findall(r'[A-Za-z]+|\d+', label)
+    parts = re.findall(r'[A-Za-z]+|\d+|/', label)  # keep slashes
     return ''.join([
-        parts[i].upper() if i % 2 == 0 else parts[i].translate(superscript_map)
+        parts[i].upper() if parts[i].isalpha() else 
+        parts[i].translate(superscript_map) if parts[i].isdigit() else 
+        parts[i]  # keep '/' as is
         for i in range(len(parts))
     ])
 
@@ -24,8 +26,8 @@ data = {
     'H148A':     [-84.0843, -66.3143, -48.5443],
     'W149R':     [-77.516, -81.2264, -84.9364],
     'W149A':     [-69.552, -69.8835, -70.216],
-    'H148PW149R':[-77.093, -88.4217, -99.749],
-    'H148AW149A':[-59.643, -61.7823, -63.921],
+    'H148P/W149R':[-77.093, -88.4217, -99.749],
+    'H148A/W149A':[-59.643, -61.7823, -63.921],
 }
 
 # Format labels
@@ -96,7 +98,6 @@ ax1.axhline(wt_mean, linestyle='--', color='blue', linewidth=1.2)
 
 # Remove title and legend
 ax1.set_title('')
-# ax1.legend()  # Not used
 
 # Stats table on right
 ax2.axis('off')
@@ -105,10 +106,10 @@ table = ax2.table(
     colLabels=stats.columns,
     cellLoc='center',
     loc='center',
-    colColours=['lightblue'] * 3
+    colColours=['lightgrey'] * 3
 )
 table.auto_set_font_size(False)
-table.set_fontsize(8.5)  # Slightly smaller for entire table
+table.set_fontsize(8)  # Slightly smaller for entire table
 table.scale(1, 2.2)
 
 # Reduce column header font size separately
@@ -129,8 +130,5 @@ fig.savefig(output_svg, format='svg', bbox_inches='tight')
 
 print(f"Figure saved as PDF: {output_pdf}")
 print(f"Figure saved as SVG: {output_svg}")
-
-
-
 
 plt.show()
