@@ -65,7 +65,7 @@ sns.barplot(
     order=sorted_labels,
     ax=ax1,
     errorbar='sd',
-    palette=['white' if label == 'WT' else 'lightblue' for label in sorted_labels],
+    palette=['white' if label == 'WT' else 'black' for label in sorted_labels],
     edgecolor='black',
     linewidth=1.2
 )
@@ -77,7 +77,7 @@ sns.stripplot(
     y='ΔG',
     order=sorted_labels,
     ax=ax1,
-    color='black',
+    color='blue',
     size=8,  # larger points
     jitter=True,
     alpha=0.8
@@ -85,7 +85,7 @@ sns.stripplot(
 
 # X-axis formatting
 ax1.set_xticks(range(len(formatted_sorted_labels)))
-ax1.set_xticklabels(formatted_sorted_labels, rotation=0, fontsize=12)
+ax1.set_xticklabels(formatted_sorted_labels, rotation=0, fontsize=10)
 ax1.set_ylabel('ΔG (kcal/mol)', fontsize=12)
 ax1.set_xlabel('')
 ax1.grid(False)  # remove gridlines
@@ -108,16 +108,29 @@ table = ax2.table(
     colColours=['lightblue'] * 3
 )
 table.auto_set_font_size(False)
-table.set_fontsize(11)  # Slightly smaller for entire table
+table.set_fontsize(8.5)  # Slightly smaller for entire table
 table.scale(1, 2.2)
 
 # Reduce column header font size separately
 for col in range(len(stats.columns)):
-    table[(0, col)].set_fontsize(7.5)
+    table[(0, col)].set_fontsize(6)
 
 # ANOVA p-value under table
 ax2.text(0.5, 0, f'Overall ANOVA p-value = {anova_p:.4f}', ha='center', va='top', fontsize=12, transform=ax2.transAxes)
 
-plt.tight_layout()
-plt.savefig(r'C:\Users\lrmacha\Downloads\deltaG_plot.jpg', dpi=300, format='jpg', bbox_inches='tight')
+# ---------------------------
+# Save figure for publication
+# ---------------------------
+output_pdf = "C:/Users/lrmacha/Downloads/deltaG_plot.pdf"
+output_svg = "C:/Users/lrmacha/Downloads/deltaG_plot.svg"
+
+fig.savefig(output_pdf, format='pdf', bbox_inches='tight')
+fig.savefig(output_svg, format='svg', bbox_inches='tight')
+
+print(f"Figure saved as PDF: {output_pdf}")
+print(f"Figure saved as SVG: {output_svg}")
+
+
+
+
 plt.show()
