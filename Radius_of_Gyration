@@ -1,0 +1,143 @@
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+from scipy.stats import kruskal
+import scikit_posthocs as sp
+import re
+import numpy as np
+from matplotlib.ticker import AutoMinorLocator
+
+# ---------------------------
+# Helper functions
+# ---------------------------
+
+def superscript_mutant(name):
+    """Convert numbers in labels to superscript."""
+    superscript_map = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
+    return re.sub(r'(\d+)', lambda x: x.group().translate(superscript_map), name)
+
+def p_to_stars(pval):
+    """Convert p-value to significance stars."""
+    if pval < 0.001:
+        return '***'
+    elif pval < 0.01:
+        return '**'
+    elif pval < 0.05:
+        return '*'
+    else:
+        return 'ns'
+
+# ---------------------------
+# Load datasets
+# ---------------------------
+
+file_R = "C:/Users/lrmacha/Downloads/Rog_R.csv"
+file_L = "C:/Users/lrmacha/Downloads/Rog_L.csv"
+
+df_R = pd.read_csv(file_R)
+df_L = pd.read_csv(file_L)
+
+datasets = {
+    "A": ("R", df_R),
+    "B": ("L", df_L)
+}
+
+# ---------------------------
+# Set up figure with two panels
+# ---------------------------
+fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
+
+for panel, (axis_label, df) in datasets.items():
+    ax = axes[0] if panel == "A" else axes[1]
+
+    # Drop first column if it's time
+    df_data = df.iloc[:, 1:]
+
+    # Long format
+    df_long = df_data.melt(var_name='Receptor', value_name='Rg')
+    df_long['Receptor'] = df_long['Receptor'].apply(superscript_mutant)
+
+    # Means & SD
+    means = df_data.mean()
+    stds = df_data.std()
+    means.index = df_data.columns.map(superscript_mutant)
+    stds.index = df_data.columns.map(superscript_mutant)
+
+    # Palette setup
+    palette = []
+    edge_colors = []
+    for col in df_data.columns:
+        if col == 'WT':
+            palette.append('white')
+            edge_colors.append('black')
+        else:
+            palette.append('black')
+            edge_colors.append('black')
+
+    # Bar plot
+    sns.barplot(data=df_long, x='Receptor', y='Rg', palette=palette, ci='sd', ax=ax)
+
+    # Remove top and right frames
+    #sns.despine(ax=ax, top=True, right=True)
+
+    # Optional: keep only left/bottom ticks
+   # ax.tick_params(axis='y', which='major', left=True, right=False)
+    #ax.tick_params(axis='x', which='major', bottom=True, top=False)
+
+
+
+    # Fix edge colors
+    for patch, ec in zip(ax.patches, edge_colors):
+        patch.set_edgecolor(ec)
+        patch.set_linewidth(1.5)
+
+    # Axis labels (angstrom symbol Å)
+    ax.set_ylabel(f'Radius of Gyration ({axis_label}) [Å]')
+    ax.set_xlabel('Substitution')
+
+    # Rotate x labels
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
+
+    # Show y-axis numbers for both panels
+    #ax.yaxis.set_minor_locator(AutoMinorLocator())
+    ax.tick_params(axis='y', which='both', right=False, left=True)
+
+    # ---------------------------
+    # Statistical tests
+    # ---------------------------
+    groups = [df_data[col].dropna() for col in df_data.columns]
+    stat, p = kruskal(*groups)
+    print(f"Panel {panel} ({axis_label}) – Kruskal-Wallis H = {stat:.3f}, p = {p:.4f}")
+
+    if p < 0.05:
+        df_posthoc = sp.posthoc_dunn(df_long, val_col='Rg', group_col='Receptor', p_adjust='bonferroni')
+        WT_label = superscript_mutant('WT')
+
+        # Add stars
+        for i, receptor in enumerate(df_long['Receptor'].unique()):
+            if receptor != WT_label:
+                pval = df_posthoc.loc[WT_label, receptor]
+                bar_height = means[receptor]
+                error = stds[receptor]
+                y = bar_height + error + 0.001 * np.max(means)
+                ax.text(i, y, p_to_stars(pval), ha='center', va='bottom', fontsize=12, color='black')
+
+    # Add panel label (A, B)
+    x_shift = -0.25 if panel == "A" else -0.15  # shift B slightly closer to plot
+    ax.text(x_shift, 1.05, panel, transform=ax.transAxes,
+            fontsize=14, fontweight='bold', va='top', ha='right')
+
+# ---------------------------
+# Save output
+# ---------------------------
+output_pdf = "C:/Users/lrmacha/Downloads/Rg_panels.pdf"
+output_svg = "C:/Users/lrmacha/Downloads/Rg_panels.svg"
+
+plt.tight_layout()
+fig.savefig(output_pdf, format='pdf', bbox_inches='tight')
+fig.savefig(output_svg, format='svg', bbox_inches='tight')
+
+print(f"Figure saved as PDF: {output_pdf}")
+print(f"Figure saved as SVG: {output_svg}")
+
+plt.show()
