@@ -29,6 +29,22 @@ color_mutant = '#D55E00'  # Orange/red for all mutants
 line_width = 1.2
 
 # ---------------------------
+# Helper function to collapse consecutive numbers into ranges
+# ---------------------------
+def collapse_ranges(residues):
+    residues = sorted(residues)
+    ranges = []
+    start = end = residues[0]
+    for r in residues[1:]:
+        if r == end + 1:
+            end = r
+        else:
+            ranges.append(f"{start}" if start == end else f"{start}-{end}")
+            start = end = r
+    ranges.append(f"{start}" if start == end else f"{start}-{end}")
+    return ",".join(ranges)
+
+# ---------------------------
 # Prepare figure
 # ---------------------------
 n_mutants = len(mutants)
@@ -43,6 +59,9 @@ letters_R = list(string.ascii_uppercase[6:6+n_mutants])  # G–L
 # Summary dictionary
 summary_diff = {}
 
+# ---------------------------
+# Plotting
+# ---------------------------
 for i, mutant in enumerate(mutants):
     ax_L = axes[i][0]
     ax_R = axes[i][1]
@@ -59,12 +78,16 @@ for i, mutant in enumerate(mutants):
     if i == 0:
         ax_L.legend()
     
-    # Highlight positions with difference >2SD of WT
     WT_sd_L = np.std(df_data_L[WT_col])
     diff_L = abs(df_data_L[mutant] - df_data_L[WT_col])
     big_positions_L = residues_L[diff_L > 2*WT_sd_L]
+    
     for pos in big_positions_L:
-        ax_L.axvline(pos, color='black', linestyle='--', alpha=0.5, linewidth=1)
+        ax_L.axvline(pos, color='black', linestyle='--', linewidth=1, alpha=0.5)
+    
+    if len(big_positions_L) > 0:
+        residue_text = collapse_ranges(big_positions_L)
+        ax_L.text(0.02, 0.95, residue_text, transform=ax_L.transAxes, fontsize=9, ha='left', va='top', color='black', wrap=True)
     
     summary_diff[f'{mutant}_L'] = list(big_positions_L)
     
@@ -83,8 +106,13 @@ for i, mutant in enumerate(mutants):
     WT_sd_R = np.std(df_data_R[WT_col])
     diff_R = abs(df_data_R[mutant] - df_data_R[WT_col])
     big_positions_R = residues_R[diff_R > 2*WT_sd_R]
+    
     for pos in big_positions_R:
-        ax_R.axvline(pos, color='black', linestyle='--', alpha=0.5, linewidth=1)
+        ax_R.axvline(pos, color='black', linestyle='--', linewidth=1, alpha=0.5)
+    
+    if len(big_positions_R) > 0:
+        residue_text = collapse_ranges(big_positions_R)
+        ax_R.text(0.02, 0.95, residue_text, transform=ax_R.transAxes, fontsize=9, ha='left', va='top', color='black', wrap=True)
     
     summary_diff[f'{mutant}_R'] = list(big_positions_R)
 
@@ -97,8 +125,8 @@ plt.tight_layout()
 # ---------------------------
 # Save figure
 # ---------------------------
-pdf_path = "C:/Users/lrmacha/Downloads/RMSF_LR_WT_vs_mutants_diff_2SD.pdf"
-svg_path = "C:/Users/lrmacha/Downloads/RMSF_LR_WT_vs_mutants_diff_2SD.svg"
+pdf_path = "C:/Users/lrmacha/Downloads/RMSF_LR_WT_vs_mutants_diff_2SD_topcorner.pdf"
+svg_path = "C:/Users/lrmacha/Downloads/RMSF_LR_WT_vs_mutants_diff_2SD_topcorner.svg"
 fig.savefig(pdf_path, bbox_inches='tight')
 fig.savefig(svg_path, bbox_inches='tight')
 plt.show()
@@ -107,7 +135,7 @@ plt.show()
 # Save summary table of positions with big differences
 # ---------------------------
 summary_df = pd.DataFrame(dict([(k,pd.Series(v)) for k,v in summary_diff.items()]))
-summary_csv = "C:/Users/lrmacha/Downloads/RMSF_LR_WT_vs_mutants_diff_positions_2SD.csv"
+summary_csv = "C:/Users/lrmacha/Downloads/RMSF_LR_WT_vs_mutants_diff_positions_2SD_topcorner.csv"
 summary_df.to_csv(summary_csv, index=False)
 
 print(f"Figures saved as:\nPDF: {pdf_path}\nSVG: {svg_path}")
