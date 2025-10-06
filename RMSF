@@ -1,5 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import string
 
 # ---------------------------
 # Load RMSF CSVs
@@ -32,9 +33,15 @@ line_width = 1.2
 n_mutants = len(mutants)
 fig, axes = plt.subplots(n_mutants, 2, figsize=(14, 4*n_mutants), sharex=False, sharey=False)
 
-# If only one mutant, ensure axes is 2D
+# Ensure axes is 2D if only one mutant
 if n_mutants == 1:
     axes = [axes]
+
+# Letters for RMSF_L panels
+letters_L = list(string.ascii_uppercase[:n_mutants])  # A, B, C ...
+
+# Letters for RMSF_R panels (start from G)
+letters_R = list(string.ascii_uppercase[6:6+n_mutants])  # G, H, I ...
 
 for i, mutant in enumerate(mutants):
     ax_L = axes[i][0]
@@ -43,18 +50,21 @@ for i, mutant in enumerate(mutants):
     # Left plot: RMSF_L
     ax_L.plot(residues_L, df_data_L[WT_col], label='WT', linewidth=line_width, color=color_WT)
     ax_L.plot(residues_L, df_data_L[mutant], label=mutant, linewidth=line_width, color=color_mutant)
-    ax_L.set_title(f'{mutant} - RMSF_L')
     ax_L.set_ylabel('RMSF (Å)')
-    ax_L.grid(True)
+    ax_L.set_title(f'{mutant} - RMSF_L')
+    ax_L.grid(False)
+    ax_L.text(-0.05, 1.05, letters_L[i], transform=ax_L.transAxes, fontsize=16, fontweight='bold', va='top', ha='right')
     if i == 0:
         ax_L.legend()
     
     # Right plot: RMSF_R
     ax_R.plot(residues_R, df_data_R[WT_col], label='WT', linewidth=line_width, color=color_WT)
     ax_R.plot(residues_R, df_data_R[mutant], label=mutant, linewidth=line_width, color=color_mutant)
-    ax_R.set_title(f'{mutant} - RMSF_R')
     ax_R.set_ylabel('RMSF (Å)')
-    ax_R.grid(True)
+    ax_R.set_title(f'{mutant} - RMSF_R')
+    ax_R.grid(False)
+    label_R = letters_R[i] if i < len(letters_R) else f"{chr(71+i)}"  # fallback just in case
+    ax_R.text(-0.05, 1.05, label_R, transform=ax_R.transAxes, fontsize=16, fontweight='bold', va='top', ha='right')
     if i == 0:
         ax_R.legend()
 
@@ -67,8 +77,8 @@ plt.tight_layout()
 # ---------------------------
 # Save figure to PDF and SVG
 # ---------------------------
-pdf_path = "C:/Users/lrmacha/Downloads/RMSF_LR_WT_vs_mutants.pdf"
-svg_path = "C:/Users/lrmacha/Downloads/RMSF_LR_WT_vs_mutants.svg"
+pdf_path = "C:/Users/lrmacha/Downloads/RMSF_LR_WT_vs_mutants_labeled_seq.pdf"
+svg_path = "C:/Users/lrmacha/Downloads/RMSF_LR_WT_vs_mutants_labeled_seq.svg"
 
 fig.savefig(pdf_path, bbox_inches='tight')
 fig.savefig(svg_path, bbox_inches='tight')
