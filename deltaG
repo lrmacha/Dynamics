@@ -5,21 +5,32 @@ import re
 from scipy.stats import f_oneway
 import numpy as np
 
-# Superscript conversion
+# ---------------------------
+# Helper functions
+# ---------------------------
 superscript_map = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
 
 def superscript_codons(label):
+    """Format codons with superscript numbers."""
     if label == 'WT':
         return label
-    parts = re.findall(r'[A-Za-z]+|\d+|/', label)  # keep slashes
+    parts = re.findall(r'[A-Za-z]+|\d+|/', label)
     return ''.join([
-        parts[i].upper() if parts[i].isalpha() else 
-        parts[i].translate(superscript_map) if parts[i].isdigit() else 
-        parts[i]  # keep '/' as is
-        for i in range(len(parts))
+        p.upper() if p.isalpha() else 
+        p.translate(superscript_map) if p.isdigit() else 
+        p for p in parts
     ])
 
+def format_p(p):
+    """Format p-values in journal style."""
+    if p < 0.0001:
+        return "p < 0.0001"
+    else:
+        return f"p = {p:.4f}"
+
+# ---------------------------
 # Data
+# ---------------------------
 data = {
     'WT':        [-90.603, -76.675, -62.747],
     'H148P':     [-86.168, -85.2021, -84.236],
@@ -30,16 +41,17 @@ data = {
     'H148A/W149A':[-59.643, -61.7823, -63.921],
 }
 
-# Format labels
+# ---------------------------
+# Data processing
+# ---------------------------
 original_labels = list(data.keys())
 formatted_labels = [superscript_codons(label) for label in original_labels]
 
-# DataFrame
 df = pd.DataFrame(data)
 df_melted = df.melt(var_name='Mutant', value_name='ΔG')
 df_melted['Group'] = df_melted['Mutant'].apply(lambda x: 'WT' if x == 'WT' else 'Mutant')
 
-# Reorder labels to put WT first
+# Reorder: WT first
 sorted_labels = ['WT'] + sorted([x for x in original_labels if x != 'WT'], key=lambda x: x)
 formatted_sorted_labels = [superscript_codons(label) for label in sorted_labels]
 
@@ -55,11 +67,15 @@ stats = pd.DataFrame({
 # ANOVA
 groups = [df[col] for col in sorted_labels]
 anova_stat, anova_p = f_oneway(*groups)
+p_text = format_p(anova_p)
 
+# ---------------------------
 # Plotting
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 6), gridspec_kw={'width_ratios': [2.5, 1]})
+# ---------------------------
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 6),
+                               gridspec_kw={'width_ratios': [2.5, 1]})
 
-# Barplot
+# --- Barplot ---
 sns.barplot(
     data=df_melted,
     x='Mutant',
@@ -80,26 +96,32 @@ sns.stripplot(
     order=sorted_labels,
     ax=ax1,
     color='blue',
-    size=8,  # larger points
+    size=8,
     jitter=True,
     alpha=0.8
 )
 
-# X-axis formatting
+# Formatting
 ax1.set_xticks(range(len(formatted_sorted_labels)))
 ax1.set_xticklabels(formatted_sorted_labels, rotation=0, fontsize=10)
 ax1.set_ylabel('ΔG (kcal/mol)', fontsize=12)
 ax1.set_xlabel('')
-ax1.grid(False)  # remove gridlines
+ax1.grid(False)
 
 # WT mean reference line
 wt_mean = df['WT'].mean()
 ax1.axhline(wt_mean, linestyle='--', color='blue', linewidth=1.2)
 
-# Remove title and legend
-ax1.set_title('')
+# Add ANOVA p-value inside the chart (bottom-right)
+ax1.text(
+    0.98, 0.03, p_text,
+    transform=ax1.transAxes,
+    ha='right', va='bottom',
+    fontsize=10, style='italic',
+    bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=2)
+)
 
-# Stats table on right
+# --- Table ---
 ax2.axis('off')
 table = ax2.table(
     cellText=stats.values,
@@ -109,18 +131,22 @@ table = ax2.table(
     colColours=['lightgrey'] * 3
 )
 table.auto_set_font_size(False)
-table.set_fontsize(8)  # Slightly smaller for entire table
+table.set_fontsize(8)
 table.scale(1, 2.2)
 
-# Reduce column header font size separately
+# Adjust header font size
 for col in range(len(stats.columns)):
     table[(0, col)].set_fontsize(6)
 
-# ANOVA p-value under table
-ax2.text(0.5, 0, f'Overall ANOVA p-value = {anova_p:.4f}', ha='center', va='top', fontsize=12, transform=ax2.transAxes)
+
+# --- Subpanel labels ---
+ax1.text(-0.15, 1.05, 'A', transform=ax1.transAxes,
+         fontsize=16, fontweight='bold', va='top', ha='right')
+ax2.text(-0.2, 1.05, 'B', transform=ax2.transAxes,
+         fontsize=16, fontweight='bold', va='top', ha='right')
 
 # ---------------------------
-# Save figure for publication
+# Save figure
 # ---------------------------
 output_pdf = "C:/Users/lrmacha/Downloads/deltaG_plot.pdf"
 output_svg = "C:/Users/lrmacha/Downloads/deltaG_plot.svg"
