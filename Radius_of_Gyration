@@ -1,23 +1,21 @@
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from scipy.stats import kruskal
-import scikit_posthocs as sp
-import re
 import numpy as np
-from matplotlib.ticker import AutoMinorLocator
+import re
+from scipy.stats import shapiro, f_oneway, kruskal
+import scikit_posthocs as sp
+from statsmodels.stats.multicomp import pairwise_tukeyhsd
+from matplotlib.ticker import AutoMinorLocator, MaxNLocator
 
 # ---------------------------
 # Helper functions
 # ---------------------------
-
 def superscript_mutant(name):
-    """Convert numbers in labels to superscript."""
     superscript_map = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
     return re.sub(r'(\d+)', lambda x: x.group().translate(superscript_map), name)
 
 def p_to_stars(pval):
-    """Convert p-value to significance stars."""
     if pval < 0.001:
         return '***'
     elif pval < 0.01:
@@ -28,116 +26,157 @@ def p_to_stars(pval):
         return 'ns'
 
 # ---------------------------
-# Load datasets
+# Dataset paths
 # ---------------------------
-
-file_R = "C:/Users/lrmacha/Downloads/Rog_R.csv"
-file_L = "C:/Users/lrmacha/Downloads/Rog_L.csv"
-
-df_R = pd.read_csv(file_R)
-df_L = pd.read_csv(file_L)
-
 datasets = {
-    "A": ("R", df_R),
-    "B": ("L", df_L)
+    "A": ("R", "C:/Users/lrmacha/Downloads/Rog_R.csv"),
+    "B": ("L", "C:/Users/lrmacha/Downloads/Rog_L.csv")
 }
 
-# ---------------------------
-# Set up figure with two panels
-# ---------------------------
-fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
+# Prepare dataframe to store stats
+summary_stats = []
 
-for panel, (axis_label, df) in datasets.items():
-    ax = axes[0] if panel == "A" else axes[1]
+# ---------------------------
+# Figure setup
+# ---------------------------
+fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=False)
 
-    # Drop first column if it's time
+for panel, (axis_label, file_path) in datasets.items():
+    df = pd.read_csv(file_path)
     df_data = df.iloc[:, 1:]
-
-    # Long format
     df_long = df_data.melt(var_name='Receptor', value_name='Rg')
     df_long['Receptor'] = df_long['Receptor'].apply(superscript_mutant)
-
-    # Means & SD
     means = df_data.mean()
     stds = df_data.std()
     means.index = df_data.columns.map(superscript_mutant)
     stds.index = df_data.columns.map(superscript_mutant)
+    palette = ['white' if col == 'WT' else 'black' for col in df_data.columns]
+    edge_colors = ['black'] * len(df_data.columns)
+    ax = axes[0] if panel == "A" else axes[1]
 
-    # Palette setup
-    palette = []
-    edge_colors = []
-    for col in df_data.columns:
-        if col == 'WT':
-            palette.append('white')
-            edge_colors.append('black')
-        else:
-            palette.append('black')
-            edge_colors.append('black')
-
+    # ---------------------------
     # Bar plot
+    # ---------------------------
     sns.barplot(data=df_long, x='Receptor', y='Rg', palette=palette, ci='sd', ax=ax)
-
-    # Remove top and right frames
-    #sns.despine(ax=ax, top=True, right=True)
-
-    # Optional: keep only left/bottom ticks
-   # ax.tick_params(axis='y', which='major', left=True, right=False)
-    #ax.tick_params(axis='x', which='major', bottom=True, top=False)
-
-
-
-    # Fix edge colors
     for patch, ec in zip(ax.patches, edge_colors):
         patch.set_edgecolor(ec)
         patch.set_linewidth(1.5)
-
-    # Axis labels (angstrom symbol Å)
-    ax.set_ylabel(f'Radius of Gyration ({axis_label}) [Å]')
     ax.set_xlabel('Substitution')
-
-    # Rotate x labels
+    ax.set_ylabel(f'Radius of Gyration ({axis_label}) [Å]')
     ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
-
-    # Show y-axis numbers for both panels
-    #ax.yaxis.set_minor_locator(AutoMinorLocator())
+    ax.yaxis.set_major_locator(MaxNLocator(integer=False))
+    ax.yaxis.set_minor_locator(AutoMinorLocator())
     ax.tick_params(axis='y', which='both', right=False, left=True)
+    if panel == "B":
+        ax.tick_params(axis='y', labelleft=True)
 
     # ---------------------------
-    # Statistical tests
+    # Normality testing
     # ---------------------------
-    groups = [df_data[col].dropna() for col in df_data.columns]
-    stat, p = kruskal(*groups)
-    print(f"Panel {panel} ({axis_label}) – Kruskal-Wallis H = {stat:.3f}, p = {p:.4f}")
+    normality = {}
+    for col in df_data.columns:
+        stat_n, pval_n = shapiro(df_data[col].dropna())
+        normality[col] = pval_n
+        summary_stats.append({
+            'Panel': panel,
+            'Receptor': col,
+            'Normality_p': pval_n
+        })
 
+    # ---------------------------
+    # Choose test
+    # ---------------------------
+    if all(p > 0.05 for p in normality.values()):
+        test_name = "ANOVA"
+        stat, p = f_oneway(*[df_data[col].dropna() for col in df_data.columns])
+    else:
+        test_name = "Kruskal-Wallis"
+        stat, p = kruskal(*[df_data[col].dropna() for col in df_data.columns])
+    print(f"Panel {panel} ({axis_label}) – {test_name} stat = {stat:.3f}, p = {p:.4f}")
+
+    # Add test summary for panel
+    for col in df_data.columns:
+        summary_stats.append({
+            'Panel': panel,
+            'Receptor': col,
+            'Test': test_name,
+            'Test_stat': stat,
+            'Test_p': p
+        })
+
+    # ---------------------------
+    # Post-hoc tests if significant
+    # ---------------------------
     if p < 0.05:
-        df_posthoc = sp.posthoc_dunn(df_long, val_col='Rg', group_col='Receptor', p_adjust='bonferroni')
-        WT_label = superscript_mutant('WT')
+        if test_name == "ANOVA":
+            tukey = pairwise_tukeyhsd(endog=df_long['Rg'], groups=df_long['Receptor'], alpha=0.05)
+            posthoc_results = pd.DataFrame(data=tukey._results_table.data[1:], columns=tukey._results_table.data[0])
+            for i, receptor in enumerate(df_long['Receptor'].unique()):
+                if receptor != superscript_mutant('WT'):
+                    row = posthoc_results[(posthoc_results['group1'] == 'WT') & (posthoc_results['group2'] == receptor)]
+                    if row.empty:
+                        row = posthoc_results[(posthoc_results['group2'] == 'WT') & (posthoc_results['group1'] == receptor)]
+                    if not row.empty:
+                        pval_post = float(row['p-adj'])
+                        summary_stats.append({
+                            'Panel': panel,
+                            'Receptor': receptor,
+                            'Posthoc_p': pval_post
+                        })
+                        bar_height = means[receptor]
+                        error = stds[receptor]
+                        y = bar_height + error + 0.001 * np.max(means)
+                        ax.text(i, y, p_to_stars(pval_post), ha='center', va='bottom', fontsize=12)
+        else:
+            df_posthoc = sp.posthoc_dunn(df_long, val_col='Rg', group_col='Receptor', p_adjust='bonferroni')
+            WT_label = superscript_mutant('WT')
+            for i, receptor in enumerate(df_long['Receptor'].unique()):
+                if receptor != WT_label:
+                    pval_post = df_posthoc.loc[WT_label, receptor]
+                    summary_stats.append({
+                        'Panel': panel,
+                        'Receptor': receptor,
+                        'Posthoc_p': pval_post
+                    })
+                    bar_height = means[receptor]
+                    error = stds[receptor]
+                    y = bar_height + error + 0.001 * np.max(means)
+                    ax.text(i, y, p_to_stars(pval_post), ha='center', va='bottom', fontsize=12)
 
-        # Add stars
-        for i, receptor in enumerate(df_long['Receptor'].unique()):
-            if receptor != WT_label:
-                pval = df_posthoc.loc[WT_label, receptor]
-                bar_height = means[receptor]
-                error = stds[receptor]
-                y = bar_height + error + 0.001 * np.max(means)
-                ax.text(i, y, p_to_stars(pval), ha='center', va='bottom', fontsize=12, color='black')
-
-    # Add panel label (A, B)
-    x_shift = -0.25 if panel == "A" else -0.15  # shift B slightly closer to plot
-    ax.text(x_shift, 1.05, panel, transform=ax.transAxes,
+    # ---------------------------
+    # Panel label
+    # ---------------------------
+    ax.text(-0.15, 1.05, panel, transform=ax.transAxes,
             fontsize=14, fontweight='bold', va='top', ha='right')
 
 # ---------------------------
-# Save output
+# Save figure
 # ---------------------------
-output_pdf = "C:/Users/lrmacha/Downloads/Rg_panels.pdf"
-output_svg = "C:/Users/lrmacha/Downloads/Rg_panels.svg"
-
+output_pdf = "C:/Users/lrmacha/Downloads/Rg_panels_AB.pdf"
+output_svg = "C:/Users/lrmacha/Downloads/Rg_panels_AB.svg"
 plt.tight_layout()
-fig.savefig(output_pdf, format='pdf', bbox_inches='tight')
-fig.savefig(output_svg, format='svg', bbox_inches='tight')
-
-print(f"Figure saved as PDF: {output_pdf}")
-print(f"Figure saved as SVG: {output_svg}")
-
+fig.savefig(output_pdf, bbox_inches='tight')
+fig.savefig(output_svg, bbox_inches='tight')
 plt.show()
+
+# ---------------------------
+# Save stats summary as PDF
+# ---------------------------
+summary_df = pd.DataFrame(summary_stats)
+
+# Create a simple PDF table using matplotlib
+fig_table, ax_table = plt.subplots(figsize=(8, len(summary_df)*0.25 + 1))
+ax_table.axis('off')
+tbl = ax_table.table(cellText=summary_df.round(4).fillna('').values,
+                     colLabels=summary_df.columns,
+                     cellLoc='center',
+                     loc='center')
+tbl.auto_set_font_size(False)
+tbl.set_fontsize(10)
+tbl.scale(1, 1.5)
+
+summary_pdf = "C:/Users/lrmacha/Downloads/Rg_stats_summary.pdf"
+fig_table.savefig(summary_pdf, bbox_inches='tight')
+plt.close(fig_table)
+
+print(f"Stats summary saved as PDF: {summary_pdf}")
