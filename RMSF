@@ -2,59 +2,76 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # ---------------------------
-# Load RMSF CSV
+# Load RMSF CSVs
 # ---------------------------
-file_path = "C:/Users/lrmacha/Downloads/RMSF_L.csv"
-df = pd.read_csv(file_path)
+file_L = "C:/Users/lrmacha/Downloads/RMSF_L.csv"
+file_R = "C:/Users/lrmacha/Downloads/RMSF_R.csv"
 
-residues = df.iloc[:, 0]      # Residue positions
-df_data = df.iloc[:, 1:]      # WT + mutants
+df_L = pd.read_csv(file_L)
+df_R = pd.read_csv(file_R)
+
+residues_L = df_L.iloc[:, 0]
+df_data_L = df_L.iloc[:, 1:]
+
+residues_R = df_R.iloc[:, 0]
+df_data_R = df_R.iloc[:, 1:]
+
 WT_col = 'WT'
+mutants = [col for col in df_data_L.columns if col != WT_col]
 
 # ---------------------------
-# Identify mutants
-# ---------------------------
-mutants = [col for col in df_data.columns if col != WT_col]
-
-# ---------------------------
-# Consistent colors
+# Colors and line width
 # ---------------------------
 color_WT = '#0072B2'      # Blue for WT
 color_mutant = '#D55E00'  # Orange/red for all mutants
+line_width = 1.2
 
 # ---------------------------
-# Create figure with subpanels
+# Create figure with subpanels: two columns (L, R) per mutant
 # ---------------------------
 n_mutants = len(mutants)
-fig, axes = plt.subplots(n_mutants, 1, figsize=(12, 4*n_mutants), sharex=True)
+fig, axes = plt.subplots(n_mutants, 2, figsize=(14, 4*n_mutants), sharex=False, sharey=False)
 
+# If only one mutant, ensure axes is 2D
 if n_mutants == 1:
-    axes = [axes]  # Ensure axes is iterable
+    axes = [axes]
 
-line_width = 1.2  # Thinner lines
-
-for ax, mutant in zip(axes, mutants):
-    # Plot WT and mutant
-    ax.plot(residues, df_data[WT_col], label='WT', linewidth=line_width, color=color_WT)
-    ax.plot(residues, df_data[mutant], label=mutant, linewidth=line_width, color=color_mutant)
+for i, mutant in enumerate(mutants):
+    ax_L = axes[i][0]
+    ax_R = axes[i][1]
     
-    ax.set_ylabel('RMSF (Å)')
-    ax.set_title(f'WT vs {mutant}')
-    ax.legend()
-    ax.grid(True)
+    # Left plot: RMSF_L
+    ax_L.plot(residues_L, df_data_L[WT_col], label='WT', linewidth=line_width, color=color_WT)
+    ax_L.plot(residues_L, df_data_L[mutant], label=mutant, linewidth=line_width, color=color_mutant)
+    ax_L.set_title(f'{mutant} - RMSF_L')
+    ax_L.set_ylabel('RMSF (Å)')
+    ax_L.grid(True)
+    if i == 0:
+        ax_L.legend()
+    
+    # Right plot: RMSF_R
+    ax_R.plot(residues_R, df_data_R[WT_col], label='WT', linewidth=line_width, color=color_WT)
+    ax_R.plot(residues_R, df_data_R[mutant], label=mutant, linewidth=line_width, color=color_mutant)
+    ax_R.set_title(f'{mutant} - RMSF_R')
+    ax_R.set_ylabel('RMSF (Å)')
+    ax_R.grid(True)
+    if i == 0:
+        ax_R.legend()
 
-axes[-1].set_xlabel('Residue Position')
+# Set x-labels only on bottom plots
+for ax in axes[-1]:
+    ax.set_xlabel('Residue Position')
+
 plt.tight_layout()
 
 # ---------------------------
 # Save figure to PDF and SVG
 # ---------------------------
-pdf_path = "C:/Users/lrmacha/Downloads/RMSF_WT_vs_mutants_consistent_colors.pdf"
-svg_path = "C:/Users/lrmacha/Downloads/RMSF_WT_vs_mutants_consistent_colors.svg"
+pdf_path = "C:/Users/lrmacha/Downloads/RMSF_LR_WT_vs_mutants.pdf"
+svg_path = "C:/Users/lrmacha/Downloads/RMSF_LR_WT_vs_mutants.svg"
 
 fig.savefig(pdf_path, bbox_inches='tight')
 fig.savefig(svg_path, bbox_inches='tight')
 plt.show()
 
 print(f"Figures saved as:\nPDF: {pdf_path}\nSVG: {svg_path}")
-
