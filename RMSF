@@ -27,27 +27,31 @@ color_WT = '#0072B2'      # Blue for WT
 color_mutant = '#D55E00'  # Orange/red for all mutants
 line_width = 1.2
 
+# Threshold for large differences
+threshold = 1.5  # Å
+
 # ---------------------------
-# Create figure with subpanels: two columns (L, R) per mutant
+# Prepare figure
 # ---------------------------
 n_mutants = len(mutants)
 fig, axes = plt.subplots(n_mutants, 2, figsize=(14, 4*n_mutants), sharex=False, sharey=False)
-
-# Ensure axes is 2D if only one mutant
 if n_mutants == 1:
     axes = [axes]
 
-# Letters for RMSF_L panels
-letters_L = list(string.ascii_uppercase[:n_mutants])  # A, B, C ...
+# Panel labels
+letters_L = list(string.ascii_uppercase[:n_mutants])  # A–F
+letters_R = list(string.ascii_uppercase[6:6+n_mutants])  # G–L
 
-# Letters for RMSF_R panels (start from G)
-letters_R = list(string.ascii_uppercase[6:6+n_mutants])  # G, H, I ...
+# Summary dictionary
+summary_diff = {}
 
 for i, mutant in enumerate(mutants):
     ax_L = axes[i][0]
     ax_R = axes[i][1]
     
-    # Left plot: RMSF_L
+    # -------------------
+    # RMSF_L
+    # -------------------
     ax_L.plot(residues_L, df_data_L[WT_col], label='WT', linewidth=line_width, color=color_WT)
     ax_L.plot(residues_L, df_data_L[mutant], label=mutant, linewidth=line_width, color=color_mutant)
     ax_L.set_ylabel('RMSF (Å)')
@@ -57,31 +61,56 @@ for i, mutant in enumerate(mutants):
     if i == 0:
         ax_L.legend()
     
-    # Right plot: RMSF_R
+    # Highlight positions with big differences
+    diff_L = abs(df_data_L[mutant] - df_data_L[WT_col])
+    big_positions_L = residues_L[diff_L > threshold]
+    for pos in big_positions_L:
+        ax_L.axvline(pos, color='Black', linestyle='--', alpha=0.5, linewidth=1)
+    
+    # Save positions to summary
+    summary_diff[f'{mutant}_L'] = list(big_positions_L)
+    
+    # -------------------
+    # RMSF_R
+    # -------------------
     ax_R.plot(residues_R, df_data_R[WT_col], label='WT', linewidth=line_width, color=color_WT)
     ax_R.plot(residues_R, df_data_R[mutant], label=mutant, linewidth=line_width, color=color_mutant)
     ax_R.set_ylabel('RMSF (Å)')
     ax_R.set_title(f'{mutant} - RMSF_R')
     ax_R.grid(False)
-    label_R = letters_R[i] if i < len(letters_R) else f"{chr(71+i)}"  # fallback just in case
-    ax_R.text(-0.05, 1.05, label_R, transform=ax_R.transAxes, fontsize=16, fontweight='bold', va='top', ha='right')
+    ax_R.text(-0.05, 1.05, letters_R[i], transform=ax_R.transAxes, fontsize=16, fontweight='bold', va='top', ha='right')
     if i == 0:
         ax_R.legend()
+    
+    # Highlight positions with big differences
+    diff_R = abs(df_data_R[mutant] - df_data_R[WT_col])
+    big_positions_R = residues_R[diff_R > threshold]
+    for pos in big_positions_R:
+        ax_R.axvline(pos, color='Black', linestyle='--', alpha=0.5, linewidth=1)
+    
+    summary_diff[f'{mutant}_R'] = list(big_positions_R)
 
-# Set x-labels only on bottom plots
+# X-axis for bottom plots
 for ax in axes[-1]:
     ax.set_xlabel('Residue Position')
 
 plt.tight_layout()
 
 # ---------------------------
-# Save figure to PDF and SVG
+# Save figure
 # ---------------------------
-pdf_path = "C:/Users/lrmacha/Downloads/RMSF_LR_WT_vs_mutants_labeled_seq.pdf"
-svg_path = "C:/Users/lrmacha/Downloads/RMSF_LR_WT_vs_mutants_labeled_seq.svg"
-
+pdf_path = "C:/Users/lrmacha/Downloads/RMSF_LR_WT_vs_mutants_diff.pdf"
+svg_path = "C:/Users/lrmacha/Downloads/RMSF_LR_WT_vs_mutants_diff.svg"
 fig.savefig(pdf_path, bbox_inches='tight')
 fig.savefig(svg_path, bbox_inches='tight')
 plt.show()
 
+# ---------------------------
+# Save summary table of positions with big differences
+# ---------------------------
+summary_df = pd.DataFrame(dict([(k,pd.Series(v)) for k,v in summary_diff.items()]))
+summary_csv = "C:/Users/lrmacha/Downloads/RMSF_LR_WT_vs_mutants_diff_positions.csv"
+summary_df.to_csv(summary_csv, index=False)
+
 print(f"Figures saved as:\nPDF: {pdf_path}\nSVG: {svg_path}")
+print(f"Positions with large differences saved to CSV:\n{summary_csv}")
